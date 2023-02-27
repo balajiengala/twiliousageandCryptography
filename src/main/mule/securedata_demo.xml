@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:twilio="http://www.mulesoft.org/schema/mule/twilio"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:crypto="http://www.mulesoft.org/schema/mule/crypto" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/crypto http://www.mulesoft.org/schema/mule/crypto/current/mule-crypto.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/twilio http://www.mulesoft.org/schema/mule/twilio/current/mule-twilio.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="1f8408c2-9131-409e-98e4-fe4ef2774cd8" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="52d0d522-f8ae-4b84-b04d-edf2dc5a781b" file="properties\password.properties" />
+	<twilio:config name="Twilio_Connector_Config" doc:name="Twilio Connector Config" doc:id="16550513-1825-4a6c-95ad-ba9d3e03c2a5" >
+		<twilio:account-sid-auth-token-connection username="AC5766c35d9f7648247ac73598061f50e1" password="e0520a2c0cb3cd95197771881ba8a859"/>
+	</twilio:config>
+	<flow name="securedata_demoFlow" doc:id="5833028e-d87a-4255-8bc2-19e315a75acb" >
+		<http:listener doc:name="Listener" doc:id="c7f899ca-85f1-449d-b72a-93f1d361ed78" config-ref="HTTP_Listener_config" path="/cryptographicOperations"/>
+		<logger level="INFO" doc:name="Logger" doc:id="ea86d085-5c91-4655-9bd2-3fdc780d9a17" message="CryptoGraphic Operations Start::::::::::::::::::::::::::#[attributes.headers]"/>
+		<choice doc:name="Choice" doc:id="3ff67a98-d537-4fb0-98c5-b85bd9c7c668" >
+			<when expression='#[attributes.headers.operationType == "encrypt"]'>
+				<crypto:jce-encrypt-pbe doc:name="Jce encrypt pbe" doc:id="ee57f5a5-f370-4dde-a056-715af58a25a4" password="${http.key.password}" />
+				<logger level="INFO" doc:name="Logger" doc:id="ce4f94cb-1dc2-4393-9a1d-0f59aba4b244" message="After Encryption::::::::::#[payload]" />
+				<ee:transform doc:name="Transform Message" doc:id="bcb3bdc0-7243-4e67-8d42-aaa4b785ecc2">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+import dw::Crypto
+import toBase64 from dw::core::Binaries
+output application/json
+---
+toBase64(payload)
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<when expression='#[attributes.headers.operationType == "decrypt"]'>
+				<ee:transform doc:name="Transform Message" doc:id="1af2001d-b178-451e-8f7e-681703565e4e">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+import fromBase64 from dw::core::Binaries
+output application/octet-stream
+---
+fromBase64(payload)]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<crypto:jce-decrypt-pbe doc:name="Jce decrypt pbe" doc:id="94daee64-8b08-4e6a-8f52-f2febbf75bb8" password="${http.key.password}" />
+				<logger level="INFO" doc:name="Logger" doc:id="a86d1d24-fa2e-4a0c-9fb2-850d184a2960" message="data after Decryption:::::#[payload]"/>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="02349d11-1bac-4e2a-8841-d80126d50b41" >
+					<ee:message >
+						<ee:set-payload ><![CDATA['No Operation is Executed']]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="b96e4674-ad4d-452f-b837-77a0df1d87cc" type="ANY">
+				<ee:transform doc:name="Setting Error Description" doc:id="d61e8aaf-e3ec-4129-8006-a1a0347abb00" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: error.description as String
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="#[payload.error]" doc:name="Errordescription As String" doc:id="e20c36d1-05bc-486c-992f-69b3ea4a1b31" variableName="errordescription"/>
+				<ee:transform doc:name="Mapping source and destination to twilio" doc:id="3db4c87d-7ad1-4c9a-b4a8-752e8eac32c8">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/x-www-form-urlencoded
+---
+{
+	From: "${http.from.phonenumber}",
+	To: "${http.to.phonenumber}",
+	Body: vars.errordescription ++ "- this is the error from your API's flow"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<twilio:create20100401-accounts-messagesjson-by-account-sid doc:name="sending notification to Balaji" doc:id="8790e316-7cd9-4866-98c3-58075bef7fe8" config-ref="Twilio_Connector_Config" accountSid="AC5766c35d9f7648247ac73598061f50e1"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>
