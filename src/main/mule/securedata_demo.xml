@@ -23,7 +23,7 @@ http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mu
 			<when expression='#[attributes.headers.operationType == "encrypt"]'>
 				<crypto:jce-encrypt-pbe doc:name="Jce encrypt pbe" doc:id="ee57f5a5-f370-4dde-a056-715af58a25a4" password="${http.key.password}" />
 				<logger level="INFO" doc:name="Logger" doc:id="ce4f94cb-1dc2-4393-9a1d-0f59aba4b244" message="After Encryption::::::::::#[payload]" />
-				<ee:transform doc:name="Transform Message" doc:id="bcb3bdc0-7243-4e67-8d42-aaa4b785ecc2">
+				<ee:transform doc:name="Transform Message to Base 64" doc:id="bcb3bdc0-7243-4e67-8d42-aaa4b785ecc2">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
 import dw::Crypto
@@ -36,7 +36,7 @@ toBase64(payload)
 		</ee:transform>
 			</when>
 			<when expression='#[attributes.headers.operationType == "decrypt"]'>
-				<ee:transform doc:name="Transform Message" doc:id="1af2001d-b178-451e-8f7e-681703565e4e">
+				<ee:transform doc:name="Transform Message from base64 to octetstream" doc:id="1af2001d-b178-451e-8f7e-681703565e4e">
 					<ee:message>
 						<ee:set-payload><![CDATA[%dw 2.0
 import fromBase64 from dw::core::Binaries
